@@ -21,6 +21,11 @@
 <!-- Never cached. A status page served from cache during an outage is a
      confident wrong answer, which is worse than no page. -->
 <meta http-equiv="Cache-Control" content="no-store">
+<!-- Inline, as a data URI, so the page still fetches nothing from anywhere.
+     Without it the browser asks for /favicon.ico and Pages answers 404, which
+     puts a red line in the console of a page whose job is to look trustworthy
+     to somebody who is already suspicious that something is broken. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='11' fill='%2316a34a'/%3E%3C/svg%3E">
 <style>
   :root {
     color-scheme: light dark;
