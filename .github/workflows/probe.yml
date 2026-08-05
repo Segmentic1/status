@@ -11,11 +11,25 @@ name: probe
 
 on:
   schedule:
-    # Every ten minutes. GitHub's scheduler is best effort and drifts under
-    # load, sometimes by a lot, so the page reports when it last checked rather
-    # than implying a cadence nobody can promise. Asking for faster than this
-    # buys precision the scheduler will not honour.
-    - cron: "*/10 * * * *"
+    # Every ten minutes, deliberately off the hour.
+    #
+    # This was */10, which fires at :00, and :00 is the worst minute to ask
+    # for: GitHub says the schedule event is delayed under load and that load
+    # peaks at the start of every hour, when every */5, */10, */15 and hourly
+    # cron on the platform asks at once.
+    #
+    # How bad it was here, measured rather than assumed: in the three and a
+    # half hours after this repository was created, a cron asking for a run
+    # every ten minutes produced exactly one run. Every other measurement in
+    # history.json had arrived from a push or from somebody pressing the
+    # button, and the daily bar the page used to draw hid that entirely.
+    #
+    # Offsetting is a mitigation, not a fix. The schedule event has no
+    # guarantee behind it at all, which is why probe.mjs now takes several
+    # samples per run: what the scheduler does honour should at least be worth
+    # more than one measurement. If this stays this unreliable the trigger has
+    # to move off GitHub.
+    - cron: "3,13,23,33,43,53 * * * *"
   # For running it by hand after changing the probe or the page.
   workflow_dispatch:
   # A change to the page itself should show up without waiting for the next
@@ -47,6 +61,10 @@ concurrency:
 jobs:
   probe:
     runs-on: ubuntu-latest
+    # The probe now spends five minutes sampling, and a run that hangs holds
+    # the concurrency group above. Without a ceiling that wait is six hours,
+    # which would silence the page for the rest of the day.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 

@@ -10,6 +10,7 @@
 // It writes history.json next to itself. That file is the whole database.
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -79,6 +80,30 @@ const SLOW_MS = 3_500;
 // incident list below is what carries anything older than this window.
 const KEEP_HOURS = 100;
 
+// Several samples per run, rather than one.
+//
+// The reason is that the run itself is not reliable. GitHub's schedule event
+// is best effort and it is not a small effect here: in the three and a half
+// hours after this repository was created, a cron asking for a run every ten
+// minutes produced one. Every other measurement in the file had come from a
+// push or from somebody pressing the button.
+//
+// A daily bar hid that completely, because a day with six checks in it was
+// still one green bar. An hourly bar cannot hide it, which is how it was
+// found.
+//
+// This does not fix the scheduler and nothing here can. What it fixes is the
+// shape of an hour that does get a run: five samples over five minutes rather
+// than a single instant, so the bar reports a stretch of time instead of a
+// coin flip. An hour with no run at all stays grey, which is the truth.
+//
+// Five and 75 seconds are chosen against the ten minute slot: five minutes of
+// sampling, and even in the worst case where every request runs to the full
+// timeout, the run ends inside eight and a half minutes and is out of the way
+// before the next one is due.
+const SAMPLES = 5;
+const SAMPLE_GAP_MS = 75_000;
+
 async function probe(service) {
   const started = Date.now();
   const controller = new AbortController();
@@ -140,35 +165,21 @@ async function loadHistory() {
   }
 }
 
-async function main() {
-  const now = new Date();
-  const hour = tehranHour(now);
-  const history = await loadHistory();
-  history.hours ??= {};
-  history.incidents ??= [];
-
-  // The daily rollup the page used to draw is dropped rather than kept beside
-  // the hourly one. Every open tab re-fetches this file once a minute, and
-  // ninety days of buckets nobody renders is tens of kilobytes on the wire
-  // each time, on a page whose entire argument is that it asks for as little
-  // as possible while somebody is trying to find out whether we are down.
-  //
-  // Nothing converts: a day that recorded six checks cannot be split into the
-  // hours they happened in. The hourly window starts empty and fills.
-  delete history.days;
-
-  const results = {};
-  for (const service of SERVICES) {
-    results[service.id] = await probe(service);
-  }
-
+/**
+ * Fold one round of measurements into the history.
+ *
+ * The hour is taken from the moment of the sample rather than from the moment
+ * the run started. A run that begins at 20:56 and samples for five minutes
+ * writes its last samples into hour 21, where they happened.
+ */
+function record(history, now, results) {
   // Roll each check into the hour, keeping counts rather than every sample.
   //
-  // A hundred hours at a check every ten minutes is 600 samples per service,
-  // and keeping each one would make this file a database. Counts per hour are
-  // four numbers and answer the only question the bar asks: how much of that
-  // hour was bad.
-  const thisHour = (history.hours[hour] ??= {});
+  // A hundred hours at thirty samples an hour is 3,000 measurements per
+  // service, and keeping each one would make this file a database. Counts per
+  // hour are four numbers and answer the only question the bar asks: how much
+  // of that hour was bad.
+  const thisHour = (history.hours[tehranHour(now)] ??= {});
   for (const [id, r] of Object.entries(results)) {
     const bucket = (thisHour[id] ??= { up: 0, slow: 0, down: 0, ms: 0, checks: 0 });
     bucket[r.state] += 1;
@@ -177,18 +188,16 @@ async function main() {
     bucket.ms = Math.round(bucket.ms + (r.ms - bucket.ms) / bucket.checks);
   }
 
-  // Trim to the window. Sorted lexically, which is the same as
-  // chronologically for a fixed-width YYYY-MM-DDTHH and is the reason that
-  // format is used here at all.
-  const kept = Object.keys(history.hours).sort().slice(-KEEP_HOURS);
-  history.hours = Object.fromEntries(kept.map((h) => [h, history.hours[h]]));
-
   // Open or close an incident.
   //
   // Written by the probe rather than by hand, because an incident log that
   // depends on somebody remembering to write in it is empty on exactly the
   // days it should not be. A human can add a sentence to an entry afterwards;
   // the entry itself appears on its own.
+  //
+  // Per sample rather than per run, so a service that fails and recovers
+  // inside one run leaves an entry with both a start and an end, instead of
+  // being averaged into nothing by the time the run finishes.
   for (const service of SERVICES) {
     const r = results[service.id];
     const open = history.incidents.find((i) => i.service === service.id && !i.ended);
@@ -204,18 +213,57 @@ async function main() {
       open.ended = now.toISOString();
     }
   }
+}
+
+async function main() {
+  const history = await loadHistory();
+  history.hours ??= {};
+  history.incidents ??= [];
+
+  // The daily rollup the page used to draw is dropped rather than kept beside
+  // the hourly one. Every open tab re-fetches this file once a minute, and
+  // ninety days of buckets nobody renders is tens of kilobytes on the wire
+  // each time, on a page whose entire argument is that it asks for as little
+  // as possible while somebody is trying to find out whether we are down.
+  //
+  // Nothing converts: a day that recorded six checks cannot be split into the
+  // hours they happened in. The hourly window starts empty and fills.
+  delete history.days;
+
+  let results = {};
+  let now = new Date();
+  for (let sample = 1; sample <= SAMPLES; sample++) {
+    if (sample > 1) await sleep(SAMPLE_GAP_MS);
+
+    now = new Date();
+    results = {};
+    for (const service of SERVICES) {
+      results[service.id] = await probe(service);
+    }
+    record(history, now, results);
+
+    for (const [id, r] of Object.entries(results)) {
+      console.log(`${sample}/${SAMPLES} ${id.padEnd(8)} ${r.state.padEnd(5)} ${String(r.ms).padStart(5)}ms ${r.detail ?? ""}`);
+    }
+  }
+
+  // Trim to the window. Sorted lexically, which is the same as
+  // chronologically for a fixed-width YYYY-MM-DDTHH and is the reason that
+  // format is used here at all.
+  const kept = Object.keys(history.hours).sort().slice(-KEEP_HOURS);
+  history.hours = Object.fromEntries(kept.map((h) => [h, history.hours[h]]));
+
   // Twenty entries is more history than anybody scrolls, and the page has to
   // stay one screen.
   history.incidents = history.incidents.slice(0, 20);
 
+  // The last sample, not the run as a whole. The dot at the top of the page
+  // answers "is it up now", and the newest measurement is the only one that
+  // can answer it.
   history.updated = now.toISOString();
   history.current = results;
 
   await writeFile(HISTORY, `${JSON.stringify(history, null, 1)}\n`);
-
-  for (const [id, r] of Object.entries(results)) {
-    console.log(`${id.padEnd(8)} ${r.state.padEnd(5)} ${String(r.ms).padStart(5)}ms ${r.detail ?? ""}`);
-  }
 
   // Exit zero even when something is down.
   //
