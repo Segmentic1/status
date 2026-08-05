@@ -62,22 +62,37 @@ jobs:
           set -euo pipefail
           git config user.name "segmentic-status"
           git config user.email "status@segmentic.net"
-          git add history.json
-          # Nothing to commit is not a failure. It happens whenever a run
-          # produces byte-identical output, which is rare but not an error.
-          if git diff --cached --quiet; then
-            echo "no change"
-            exit 0
-          fi
-          git commit -q -m "status: $(date -u +%Y-%m-%dT%H:%MZ)"
-          # One retry, rebased, for the case where somebody pushed to the page
-          # while this run was measuring. If the rebase itself conflicts the
-          # run fails rather than picking a winner: a conflict here means two
-          # writers, and quietly discarding one of them loses measurements.
-          git push -q origin HEAD:main || {
-            git pull --rebase -q origin main
-            git push -q origin HEAD:main
-          }
+
+          # Three attempts, because the loser of a race has to measure again
+          # rather than merge.
+          #
+          # Rebasing is the obvious move here and it cannot work. Two runs that
+          # both appended to history.json conflict in exactly the same place
+          # every time, so a rebase retry fails as reliably as the push it was
+          # meant to rescue. Instead the loser throws its own commit away,
+          # takes whatever landed, and re-runs the probe on top of it.
+          # Re-probing costs about a second, and the extra sample is a real
+          # measurement rather than a duplicated one.
+          for attempt in 1 2 3; do
+            git add history.json
+            # Nothing to commit is not a failure. It happens whenever a run
+            # produces byte-identical output, which is rare but not an error.
+            if git diff --cached --quiet; then
+              echo "no change"
+              exit 0
+            fi
+            git commit -q -m "status: $(date -u +%Y-%m-%dT%H:%MZ)"
+            if git push -q origin HEAD:main; then
+              exit 0
+            fi
+            echo "attempt ${attempt}: somebody pushed first, measuring again on top of it"
+            git fetch -q origin main
+            git reset -q --hard FETCH_HEAD
+            node probe.mjs
+          done
+
+          echo "could not publish the history after three attempts" >&2
+          exit 1
 
       - name: Assemble the page
         run: |
