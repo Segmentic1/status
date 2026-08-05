@@ -8,54 +8,54 @@
    "note": ""
   }
  ],
- "updated": "2026-08-05T15:59:51.983Z",
+ "updated": "2026-08-05T16:00:13.192Z",
  "current": {
   "ingest": {
    "state": "up",
-   "ms": 286
+   "ms": 661
   },
   "api": {
    "state": "up",
-   "ms": 126
+   "ms": 675
   },
   "panel": {
    "state": "up",
-   "ms": 123
+   "ms": 834
   },
   "site": {
    "state": "up",
-   "ms": 296
+   "ms": 698
   }
  },
  "hours": {
   "2026-08-05T19": {
    "ingest": {
-    "up": 1,
+    "up": 2,
     "slow": 0,
     "down": 0,
-    "ms": 286,
-    "checks": 1
+    "ms": 474,
+    "checks": 2
    },
    "api": {
-    "up": 1,
+    "up": 2,
     "slow": 0,
     "down": 0,
-    "ms": 126,
-    "checks": 1
+    "ms": 401,
+    "checks": 2
    },
    "panel": {
-    "up": 1,
+    "up": 2,
     "slow": 0,
     "down": 0,
-    "ms": 123,
-    "checks": 1
+    "ms": 479,
+    "checks": 2
    },
    "site": {
-    "up": 1,
+    "up": 2,
     "slow": 0,
     "down": 0,
-    "ms": 296,
-    "checks": 1
+    "ms": 497,
+    "checks": 2
    }
   }
  }
