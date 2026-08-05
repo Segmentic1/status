@@ -1,0 +1,321 @@
+<!doctype html>
+<!--
+  The status page.
+
+  One file, no build step, no framework, no fonts fetched from anywhere. That
+  is not minimalism for its own sake: this page is read during an outage, often
+  on a phone, often on a connection that is itself part of the problem, and
+  every request it makes is another thing that can fail while somebody is
+  trying to find out whether we are the reason their events stopped arriving.
+
+  It is served from GitHub Pages, which is infrastructure we do not own and
+  cannot take down by deploying badly. history.json beside it is written by
+  probe.mjs from a scheduled workflow. Nothing here talks to Segmentic.
+-->
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>وضعیت سگمنتیک</title>
+<meta name="description" content="وضعیت لحظه‌ای سرویس‌های سگمنتیک">
+<!-- Never cached. A status page served from cache during an outage is a
+     confident wrong answer, which is worse than no page. -->
+<meta http-equiv="Cache-Control" content="no-store">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #111418;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --card: #fafafa;
+    --up: #16a34a;
+    --slow: #d97706;
+    --down: #dc2626;
+    --none: #d1d5db;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b0d10;
+      --fg: #e6e8ea;
+      --muted: #9aa1a9;
+      --line: #23272c;
+      --card: #12151a;
+      --none: #2a2f36;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    /* System fonts only. A webfont is a network request during an outage, and
+       the one thing this page must not do is wait. */
+    font-family: system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 40px 20px 64px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  h1 { font-size: 17px; font-weight: 600; margin: 0; }
+  .lang { background: none; border: 0; color: var(--muted); cursor: pointer; font: inherit; font-size: 13px; padding: 4px; }
+  .lang:hover { color: var(--fg); }
+
+  .overall { margin: 28px 0 32px; font-size: 22px; font-weight: 600; }
+  .overall .dot { width: 12px; height: 12px; }
+
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; }
+  .dot.up { background: var(--up); }
+  .dot.slow { background: var(--slow); }
+  .dot.down { background: var(--down); }
+  .dot.none { background: var(--none); }
+
+  .svc { border-top: 1px solid var(--line); padding: 16px 0; }
+  .svc-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .svc-name { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+  .svc-state { color: var(--muted); font-size: 13px; }
+
+  /* Ninety bars. flex rather than a fixed width per bar, so the row fits a
+     narrow phone by getting thinner instead of scrolling sideways. */
+  .bars { display: flex; gap: 2px; margin-top: 10px; height: 26px; direction: ltr; }
+  .bar { flex: 1 1 0; min-width: 0; border-radius: 1px; background: var(--none); }
+  .bar.up { background: var(--up); }
+  .bar.slow { background: var(--slow); }
+  .bar.down { background: var(--down); }
+  .scale { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-top: 6px; direction: ltr; }
+
+  .incidents { margin-top: 40px; border-top: 1px solid var(--line); padding-top: 20px; }
+  h2 { font-size: 14px; font-weight: 600; margin: 0 0 12px; }
+  .inc { padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .inc:last-child { border-bottom: 0; }
+  .inc-when { color: var(--muted); font-size: 13px; }
+  .none-yet { color: var(--muted); font-size: 14px; }
+
+  footer { margin-top: 40px; color: var(--muted); font-size: 12px; }
+  /* Latin digits and identifiers must read left to right even on the RTL
+     page, or an IP address and a duration come out backwards. */
+  .ltr { direction: ltr; unicode-bidi: isolate; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 data-t="title">وضعیت سگمنتیک</h1>
+    <button class="lang" id="lang" type="button">English</button>
+  </header>
+
+  <p class="overall" id="overall"><span class="dot none"></span> <span data-t="loading">در حال بررسی</span></p>
+
+  <main id="services"></main>
+
+  <section class="incidents">
+    <h2 data-t="incidents">سابقه قطعی‌ها</h2>
+    <div id="incidents"></div>
+  </section>
+
+  <footer>
+    <span data-t="updatedLabel">آخرین بررسی:</span>
+    <span id="updated" class="ltr">-</span>
+    <br>
+    <span data-t="hosting">این صفحه روی زیرساختی جدا از سگمنتیک میزبانی می‌شود، تا وقتی سرویس بخوابد با آن نخوابد.</span>
+  </footer>
+</div>
+
+<script type="module">
+/*
+  Both languages live in this file. next-intl is not here and should not be:
+  a status page that needs a build step to render a sentence is a status page
+  that can be broken by a build.
+*/
+const STR = {
+  fa: {
+    title: "وضعیت سگمنتیک",
+    loading: "در حال بررسی",
+    allUp: "همه‌ی سرویس‌ها سالم‌اند",
+    someSlow: "کند شده",
+    someDown: "قطعی داریم",
+    unknown: "وضعیت نامشخص",
+    incidents: "سابقه قطعی‌ها",
+    noIncidents: "در نود روز گذشته قطعی ثبت نشده است.",
+    updatedLabel: "آخرین بررسی:",
+    hosting: "این صفحه روی زیرساختی جدا از سگمنتیک میزبانی می‌شود، تا وقتی سرویس بخوابد با آن نخوابد.",
+    ago90: "۹۰ روز پیش",
+    today: "امروز",
+    ongoing: "ادامه دارد",
+    up: "سالم", slow: "کند", down: "قطع", none: "بدون داده",
+    svc: {
+      ingest: "دریافت رویداد",
+      api: "رابط برنامه‌نویسی",
+      panel: "پنل",
+      site: "وب‌سایت",
+    },
+    lang: "English",
+  },
+  en: {
+    title: "Segmentic status",
+    loading: "Checking",
+    allUp: "All services are healthy",
+    someSlow: "Degraded",
+    someDown: "We have an outage",
+    unknown: "Status unknown",
+    incidents: "Past incidents",
+    noIncidents: "No incidents recorded in the last ninety days.",
+    updatedLabel: "Last checked:",
+    hosting: "This page is hosted separately from Segmentic, so it does not go down with the service.",
+    ago90: "90 days ago",
+    today: "Today",
+    ongoing: "ongoing",
+    up: "Healthy", slow: "Slow", down: "Down", none: "No data",
+    svc: {
+      ingest: "Event ingest",
+      api: "API",
+      panel: "Panel",
+      site: "Website",
+    },
+    lang: "فارسی",
+  },
+};
+
+const ORDER = ["ingest", "api", "panel", "site"];
+const DAYS = 90;
+
+let locale = (localStorage.getItem("segmentic-status-lang") ??
+  (navigator.language?.startsWith("fa") ? "fa" : "fa"));
+
+/** Tehran day keys for the last ninety days, oldest first. */
+function dayKeys() {
+  const out = [];
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tehran", year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  const now = Date.now();
+  for (let i = DAYS - 1; i >= 0; i--) {
+    out.push(fmt.format(new Date(now - i * 86_400_000)));
+  }
+  return out;
+}
+
+/**
+ * One day of one service, as a single state.
+ *
+ * Any downtime at all colours the day red. A day that was 99% fine and 1% down
+ * is a day somebody's events were dropped, and averaging that away is how a
+ * status page ends up disagreeing with the person reading it.
+ */
+function dayState(bucket) {
+  if (!bucket || !bucket.checks) return "none";
+  if (bucket.down > 0) return "down";
+  if (bucket.slow > 0) return "slow";
+  return "up";
+}
+
+function render(data) {
+  const t = STR[locale];
+  document.documentElement.lang = locale;
+  document.documentElement.dir = locale === "fa" ? "rtl" : "ltr";
+  document.title = t.title;
+  document.getElementById("lang").textContent = t.lang;
+  for (const el of document.querySelectorAll("[data-t]")) {
+    el.textContent = t[el.dataset.t] ?? el.textContent;
+  }
+
+  const current = data?.current ?? {};
+  const states = ORDER.map((id) => current[id]?.state ?? "none");
+  const overall =
+    states.includes("down") ? "down" :
+    states.includes("slow") ? "slow" :
+    states.every((s) => s === "up") ? "up" : "none";
+  const overallText =
+    overall === "down" ? t.someDown :
+    overall === "slow" ? t.someSlow :
+    overall === "up" ? t.allUp : t.unknown;
+  document.getElementById("overall").innerHTML =
+    `<span class="dot ${overall}"></span> ${escapeHtml(overallText)}`;
+
+  const keys = dayKeys();
+  document.getElementById("services").innerHTML = ORDER.map((id) => {
+    const state = current[id]?.state ?? "none";
+    const bars = keys.map((k) => {
+      const s = dayState(data?.days?.[k]?.[id]);
+      return `<div class="bar ${s}" title="${k}"></div>`;
+    }).join("");
+    return `
+      <div class="svc">
+        <div class="svc-head">
+          <div class="svc-name"><span class="dot ${state}"></span>${escapeHtml(t.svc[id] ?? id)}</div>
+          <div class="svc-state">${escapeHtml(t[state] ?? state)}</div>
+        </div>
+        <div class="bars">${bars}</div>
+        <div class="scale"><span>${escapeHtml(t.ago90)}</span><span>${escapeHtml(t.today)}</span></div>
+      </div>`;
+  }).join("");
+
+  const incidents = data?.incidents ?? [];
+  document.getElementById("incidents").innerHTML = incidents.length === 0
+    ? `<p class="none-yet">${escapeHtml(t.noIncidents)}</p>`
+    : incidents.map((i) => {
+        const when = fmtDate(i.started);
+        const until = i.ended ? fmtDate(i.ended) : t.ongoing;
+        const name = t.svc[i.service] ?? i.service;
+        const note = i.note || i.detail || "";
+        return `
+          <div class="inc">
+            <div>${escapeHtml(name)}${note ? `: ${escapeHtml(note)}` : ""}</div>
+            <div class="inc-when ltr">${escapeHtml(when)} &rarr; ${escapeHtml(until)}</div>
+          </div>`;
+      }).join("");
+
+  document.getElementById("updated").textContent =
+    data?.updated ? fmtDate(data.updated) : "-";
+}
+
+/**
+ * Jalali in Persian and Gregorian in English, both in Tehran time.
+ *
+ * Intl does the calendar conversion, so no date library is fetched to render
+ * six timestamps on a page whose whole point is not depending on anything.
+ */
+function fmtDate(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "-";
+  return new Intl.DateTimeFormat(locale === "fa" ? "fa-IR-u-ca-persian" : "en-GB", {
+    timeZone: "Asia/Tehran",
+    year: "numeric", month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  }).format(d);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
+document.getElementById("lang").addEventListener("click", () => {
+  locale = locale === "fa" ? "en" : "fa";
+  localStorage.setItem("segmentic-status-lang", locale);
+  render(window.__data ?? null);
+});
+
+async function load() {
+  try {
+    // The cache buster is the point rather than a habit: this file is served
+    // by a CDN that would otherwise happily hand somebody a five-minute-old
+    // "everything is fine" in the middle of an outage.
+    const res = await fetch(`history.json?t=${Date.now()}`, { cache: "no-store" });
+    window.__data = await res.json();
+  } catch {
+    // The page still renders, with every dot grey and the overall state
+    // "unknown". Saying "we do not know" is honest; showing green because the
+    // data did not load is not.
+    window.__data = null;
+  }
+  render(window.__data);
+}
+
+load();
+// Re-read while the tab is open. Somebody who leaves this page up during an
+// incident should see it recover without pressing anything.
+setInterval(load, 60_000);
+</script>
+</body>
+</html>

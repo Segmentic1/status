@@ -1,0 +1,104 @@
+# Probe the Segmentic services from outside, and publish the result here.
+#
+# Why this repository is public and separate from the product repository:
+# GitHub Pages is not available for a private repository on a free plan, and
+# the product repository is private and staying that way. Nothing in here is
+# secret. The probe reads four public URLs and needs no credential at all,
+# which is also why the workflow lives beside the page rather than pushing to
+# it from somewhere else: no token to store, none to rotate, and none to expire
+# quietly on the day the page is most wanted.
+name: probe
+
+on:
+  schedule:
+    # Every ten minutes. GitHub's scheduler is best effort and drifts under
+    # load, sometimes by a lot, so the page reports when it last checked rather
+    # than implying a cadence nobody can promise. Asking for faster than this
+    # buys precision the scheduler will not honour.
+    - cron: "*/10 * * * *"
+  # For running it by hand after changing the probe or the page.
+  workflow_dispatch:
+  # A change to the page itself should show up without waiting for the next
+  # tick. history.json is excluded because the workflow writes it, and a run
+  # that triggers itself is a loop.
+  push:
+    branches: [main]
+    paths:
+      - index.html
+      - probe.mjs
+      - .github/workflows/probe.yml
+
+permissions:
+  # write, because history.json is committed back to this branch. It is the
+  # only thing this workflow writes.
+  contents: write
+  pages: write
+  id-token: write
+
+# One run at a time, and later runs win.
+#
+# Not cancel-in-progress: a probe that is cancelled halfway has already made
+# its measurements and would lose them, which puts a false gap in the history
+# that reads as an outage.
+concurrency:
+  group: probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Probe
+        run: node probe.mjs
+
+      - name: Keep the history
+        run: |
+          set -euo pipefail
+          git config user.name "segmentic-status"
+          git config user.email "status@segmentic.net"
+          git add history.json
+          # Nothing to commit is not a failure. It happens whenever a run
+          # produces byte-identical output, which is rare but not an error.
+          if git diff --cached --quiet; then
+            echo "no change"
+            exit 0
+          fi
+          git commit -q -m "status: $(date -u +%Y-%m-%dT%H:%MZ)"
+          # One retry, rebased, for the case where somebody pushed to the page
+          # while this run was measuring. If the rebase itself conflicts the
+          # run fails rather than picking a winner: a conflict here means two
+          # writers, and quietly discarding one of them loses measurements.
+          git push -q origin HEAD:main || {
+            git pull --rebase -q origin main
+            git push -q origin HEAD:main
+          }
+
+      - name: Assemble the page
+        run: |
+          set -euo pipefail
+          mkdir -p public
+          cp index.html history.json CNAME public/
+          # No Jekyll. Without this, Pages runs the whole directory through a
+          # static site generator that ignores files beginning with an
+          # underscore and would rewrite the HTML.
+          touch public/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  publish:
+    needs: probe
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
