@@ -2,32 +2,32 @@
  "days": {
   "2026-08-05": {
    "ingest": {
-    "up": 2,
+    "up": 3,
     "slow": 1,
     "down": 0,
-    "ms": 1747,
-    "checks": 3
+    "ms": 1697,
+    "checks": 4
    },
    "api": {
     "up": 0,
     "slow": 0,
-    "down": 3,
-    "ms": 1083,
-    "checks": 3
+    "down": 4,
+    "ms": 1094,
+    "checks": 4
    },
    "panel": {
-    "up": 3,
+    "up": 4,
     "slow": 0,
     "down": 0,
-    "ms": 1146,
-    "checks": 3
+    "ms": 1163,
+    "checks": 4
    },
    "site": {
-    "up": 3,
+    "up": 4,
     "slow": 0,
     "down": 0,
-    "ms": 1054,
-    "checks": 3
+    "ms": 1066,
+    "checks": 4
    }
   }
  },
@@ -40,24 +40,24 @@
    "note": ""
   }
  ],
- "updated": "2026-08-05T13:55:15.782Z",
+ "updated": "2026-08-05T13:59:13.007Z",
  "current": {
   "ingest": {
    "state": "up",
-   "ms": 858
+   "ms": 1547
   },
   "api": {
    "state": "down",
-   "ms": 856,
+   "ms": 1125,
    "detail": "HTTP 404"
   },
   "panel": {
    "state": "up",
-   "ms": 823
+   "ms": 1214
   },
   "site": {
    "state": "up",
-   "ms": 713
+   "ms": 1100
   }
  }
 }
