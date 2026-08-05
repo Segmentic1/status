@@ -1,4 +1,63 @@
 {
- "days": {},
- "incidents": []
+ "days": {
+  "2026-08-05": {
+   "ingest": {
+    "up": 1,
+    "slow": 0,
+    "down": 0,
+    "ms": 1458,
+    "checks": 1
+   },
+   "api": {
+    "up": 0,
+    "slow": 0,
+    "down": 1,
+    "ms": 1260,
+    "checks": 1
+   },
+   "panel": {
+    "up": 1,
+    "slow": 0,
+    "down": 0,
+    "ms": 1443,
+    "checks": 1
+   },
+   "site": {
+    "up": 1,
+    "slow": 0,
+    "down": 0,
+    "ms": 1367,
+    "checks": 1
+   }
+  }
+ },
+ "incidents": [
+  {
+   "service": "api",
+   "started": "2026-08-05T13:32:14.003Z",
+   "ended": null,
+   "detail": "HTTP 404",
+   "note": ""
+  }
+ ],
+ "updated": "2026-08-05T13:32:14.003Z",
+ "current": {
+  "ingest": {
+   "state": "up",
+   "ms": 1458
+  },
+  "api": {
+   "state": "down",
+   "ms": 1260,
+   "detail": "HTTP 404"
+  },
+  "panel": {
+   "state": "up",
+   "ms": 1443
+  },
+  "site": {
+   "state": "up",
+   "ms": 1367
+  }
+ }
 }
