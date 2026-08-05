@@ -179,8 +179,16 @@ const STR = {
 const ORDER = ["ingest", "api", "panel", "site"];
 const DAYS = 90;
 
+// A choice already made wins over a guess, and a guess wins over nothing.
+//
+// Persian is the default everywhere else in the product, and this page is the
+// one place that is wrong: it is read by whoever happens to be checking
+// whether we are up, which on a bad day includes people who have never seen
+// the panel. A browser asking for Persian gets Persian and everybody else gets
+// English. The document starts as fa/rtl in the markup so the first paint is
+// the common case rather than a flash of the wrong direction.
 let locale = (localStorage.getItem("segmentic-status-lang") ??
-  (navigator.language?.startsWith("fa") ? "fa" : "fa"));
+  (navigator.language?.startsWith("fa") ? "fa" : "en"));
 
 /** Tehran day keys for the last ninety days, oldest first. */
 function dayKeys() {
@@ -237,7 +245,9 @@ function render(data) {
     const state = current[id]?.state ?? "none";
     const bars = keys.map((k) => {
       const s = dayState(data?.days?.[k]?.[id]);
-      return `<div class="bar ${s}" title="${k}"></div>`;
+      // The tooltip is display text, so it gets the reader's calendar. The key
+      // itself stays YYYY-MM-DD everywhere else because that is what sorts.
+      return `<div class="bar ${s}" title="${escapeHtml(fmtDay(k))}"></div>`;
     }).join("");
     return `
       <div class="svc">
@@ -282,6 +292,22 @@ function fmtDate(iso) {
     timeZone: "Asia/Tehran",
     year: "numeric", month: "short", day: "numeric",
     hour: "2-digit", minute: "2-digit",
+  }).format(d);
+}
+
+/**
+ * One day key, as a date without a time.
+ *
+ * Parsed as noon UTC rather than midnight. A bare YYYY-MM-DD is midnight UTC,
+ * which is half past three in the morning in Tehran, and any rounding the
+ * other way would render the day before. Noon has no such edge.
+ */
+function fmtDay(key) {
+  const d = new Date(`${key}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return key;
+  return new Intl.DateTimeFormat(locale === "fa" ? "fa-IR-u-ca-persian" : "en-GB", {
+    timeZone: "Asia/Tehran",
+    year: "numeric", month: "short", day: "numeric",
   }).format(d);
 }
 
