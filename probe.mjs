@@ -44,7 +44,27 @@ const TIMEOUT_MS = 10_000;
 // A page with two colours has to call a service that answers in four seconds
 // "up", which is true and useless. Most real incidents look like this before
 // they look like anything else.
-const SLOW_MS = 2_000;
+//
+// The number is 3.5 seconds rather than the 2 it started as, and the reason is
+// where this runs. The probe is outside Iran and the servers are inside it, so
+// roughly a second of every measurement here is the path rather than the
+// service. Measured on 2026-08-05, the same four URLs, same minute:
+//
+//   ingest   81-320ms from Tehran    1227-1697ms from a runner
+//   api      49-236ms                1094-1171ms
+//   panel    61-139ms                1050-1163ms
+//   site    146-345ms                1003-1066ms
+//
+// At 2 seconds that left about 900ms of headroom above a floor nobody had
+// measured, so ordinary jitter on the slowest of the four was reported as a
+// degradation. It went orange on a service that was answering Iranian
+// customers in a tenth of a second.
+//
+// 3.5 leaves about 2.5 seconds above the floor: still well inside what a
+// person would call slow, and no longer tripped by the distance itself.
+// Whoever changes this should re-measure first. The floor is a property of the
+// network between two countries and it will not stay where it is.
+const SLOW_MS = 3_500;
 
 // Ninety days of daily rollups, which is what the bar shows.
 const KEEP_DAYS = 90;
