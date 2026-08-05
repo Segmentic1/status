@@ -1,36 +1,4 @@
 {
- "days": {
-  "2026-08-05": {
-   "ingest": {
-    "up": 6,
-    "slow": 1,
-    "down": 0,
-    "ms": 1431,
-    "checks": 7
-   },
-   "api": {
-    "up": 3,
-    "slow": 0,
-    "down": 4,
-    "ms": 998,
-    "checks": 7
-   },
-   "panel": {
-    "up": 7,
-    "slow": 0,
-    "down": 0,
-    "ms": 1054,
-    "checks": 7
-   },
-   "site": {
-    "up": 7,
-    "slow": 0,
-    "down": 0,
-    "ms": 992,
-    "checks": 7
-   }
-  }
- },
  "incidents": [
   {
    "service": "api",
@@ -40,23 +8,55 @@
    "note": ""
   }
  ],
- "updated": "2026-08-05T15:49:34.843Z",
+ "updated": "2026-08-05T15:59:51.983Z",
  "current": {
   "ingest": {
    "state": "up",
-   "ms": 900
+   "ms": 286
   },
   "api": {
    "state": "up",
-   "ms": 825
+   "ms": 126
   },
   "panel": {
    "state": "up",
-   "ms": 966
+   "ms": 123
   },
   "site": {
    "state": "up",
-   "ms": 749
+   "ms": 296
+  }
+ },
+ "hours": {
+  "2026-08-05T19": {
+   "ingest": {
+    "up": 1,
+    "slow": 0,
+    "down": 0,
+    "ms": 286,
+    "checks": 1
+   },
+   "api": {
+    "up": 1,
+    "slow": 0,
+    "down": 0,
+    "ms": 126,
+    "checks": 1
+   },
+   "panel": {
+    "up": 1,
+    "slow": 0,
+    "down": 0,
+    "ms": 123,
+    "checks": 1
+   },
+   "site": {
+    "up": 1,
+    "slow": 0,
+    "down": 0,
+    "ms": 296,
+    "checks": 1
+   }
   }
  }
 }

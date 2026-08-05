@@ -66,8 +66,18 @@ const TIMEOUT_MS = 10_000;
 // network between two countries and it will not stay where it is.
 const SLOW_MS = 3_500;
 
-// Ninety days of daily rollups, which is what the bar shows.
-const KEEP_DAYS = 90;
+// A hundred hours of hourly rollups, which is what the bar shows.
+//
+// A hundred bars is a little over four days. The window is deliberately short
+// and the resolution deliberately fine: at one bar per day, twenty bad minutes
+// disappeared inside a day that was otherwise green, and the bar that mattered
+// most was the one nobody could see. At one bar per hour it is a mark of its
+// own.
+//
+// The cost is at the other end. Four days is not long enough to answer "how
+// were we last month", and the daily rollup that could answer it is gone. The
+// incident list below is what carries anything older than this window.
+const KEEP_HOURS = 100;
 
 async function probe(service) {
   const started = Date.now();
@@ -99,16 +109,25 @@ async function probe(service) {
   }
 }
 
-/** Today in Tehran, as YYYY-MM-DD. */
-function tehranDay(now = new Date()) {
-  // en-CA gives ISO order, and timeZone does the offset including the half
-  // hour, which is the part that hand-rolled arithmetic gets wrong.
-  return new Intl.DateTimeFormat("en-CA", {
+/** This hour in Tehran, as YYYY-MM-DDTHH. */
+function tehranHour(now = new Date()) {
+  // timeZone does the offset including the half hour, which is the part that
+  // hand-rolled arithmetic gets wrong: Tehran is +03:30, so an hour here
+  // begins at half past the hour in UTC.
+  //
+  // Read from parts rather than from a formatted string, because a formatter
+  // asked for a date and an hour together decides its own punctuation, and
+  // hourCycle h23 is what keeps midnight as 00 rather than 24.
+  const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Tehran",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(now);
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const at = (type) => parts.find((p) => p.type === type)?.value ?? "00";
+  return `${at("year")}-${at("month")}-${at("day")}T${at("hour")}`;
 }
 
 async function loadHistory() {
@@ -116,41 +135,53 @@ async function loadHistory() {
     return JSON.parse(await readFile(HISTORY, "utf8"));
   } catch {
     // First run, or somebody deleted it. An empty history is a valid history:
-    // the page renders ninety grey days and fills in from today.
-    return { days: {}, incidents: [] };
+    // the page renders a hundred grey hours and fills in from this one.
+    return { hours: {}, incidents: [] };
   }
 }
 
 async function main() {
   const now = new Date();
-  const day = tehranDay(now);
+  const hour = tehranHour(now);
   const history = await loadHistory();
-  history.days ??= {};
+  history.hours ??= {};
   history.incidents ??= [];
+
+  // The daily rollup the page used to draw is dropped rather than kept beside
+  // the hourly one. Every open tab re-fetches this file once a minute, and
+  // ninety days of buckets nobody renders is tens of kilobytes on the wire
+  // each time, on a page whose entire argument is that it asks for as little
+  // as possible while somebody is trying to find out whether we are down.
+  //
+  // Nothing converts: a day that recorded six checks cannot be split into the
+  // hours they happened in. The hourly window starts empty and fills.
+  delete history.days;
 
   const results = {};
   for (const service of SERVICES) {
     results[service.id] = await probe(service);
   }
 
-  // Roll each check into the day, keeping counts rather than every sample.
+  // Roll each check into the hour, keeping counts rather than every sample.
   //
-  // Ninety days at one check a minute is 129,600 rows per service, which is a
-  // database. Counts per day are four numbers and answer the only question the
-  // bar asks: how much of that day was bad.
-  const today = (history.days[day] ??= {});
+  // A hundred hours at a check every ten minutes is 600 samples per service,
+  // and keeping each one would make this file a database. Counts per hour are
+  // four numbers and answer the only question the bar asks: how much of that
+  // hour was bad.
+  const thisHour = (history.hours[hour] ??= {});
   for (const [id, r] of Object.entries(results)) {
-    const bucket = (today[id] ??= { up: 0, slow: 0, down: 0, ms: 0, checks: 0 });
+    const bucket = (thisHour[id] ??= { up: 0, slow: 0, down: 0, ms: 0, checks: 0 });
     bucket[r.state] += 1;
     bucket.checks += 1;
-    // A running mean, so the day's figure does not depend on keeping samples.
+    // A running mean, so the hour's figure does not depend on keeping samples.
     bucket.ms = Math.round(bucket.ms + (r.ms - bucket.ms) / bucket.checks);
   }
 
-  // Trim to the window. Sorted lexically, which is the same as chronologically
-  // for YYYY-MM-DD and is the reason that format is used here at all.
-  const kept = Object.keys(history.days).sort().slice(-KEEP_DAYS);
-  history.days = Object.fromEntries(kept.map((d) => [d, history.days[d]]));
+  // Trim to the window. Sorted lexically, which is the same as
+  // chronologically for a fixed-width YYYY-MM-DDTHH and is the reason that
+  // format is used here at all.
+  const kept = Object.keys(history.hours).sort().slice(-KEEP_HOURS);
+  history.hours = Object.fromEntries(kept.map((h) => [h, history.hours[h]]));
 
   // Open or close an incident.
   //

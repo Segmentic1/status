@@ -80,9 +80,14 @@
   .svc-name { display: flex; align-items: center; gap: 8px; font-weight: 500; }
   .svc-state { color: var(--muted); font-size: 13px; }
 
-  /* Ninety bars. flex rather than a fixed width per bar, so the row fits a
-     narrow phone by getting thinner instead of scrolling sideways. */
+  /* A hundred bars. flex rather than a fixed width per bar, so the row fits a
+     narrow phone by getting thinner instead of scrolling sideways.
+     At a hundred bars it is the gap that runs out of room first, not the bar:
+     two pixels between a hundred bars is 198px of gap, which on a 360px phone
+     leaves each bar about a pixel and the row reads as a smear. Below the
+     width where that starts, the gap goes to one. */
   .bars { display: flex; gap: 2px; margin-top: 10px; height: 26px; direction: ltr; }
+  @media (max-width: 560px) { .bars { gap: 1px; } }
   .bar { flex: 1 1 0; min-width: 0; border-radius: 1px; background: var(--none); }
   .bar.up { background: var(--up); }
   .bar.slow { background: var(--slow); }
@@ -143,12 +148,12 @@ const STR = {
     someDown: "قطعی داریم",
     unknown: "وضعیت نامشخص",
     incidents: "سابقه قطعی‌ها",
-    noIncidents: "در نود روز گذشته قطعی ثبت نشده است.",
+    noIncidents: "در ۱۰۰ ساعت گذشته قطعی ثبت نشده است.",
     updatedLabel: "آخرین بررسی:",
     hosting: "این صفحه روی زیرساختی جدا از سگمنتیک میزبانی می‌شود، تا وقتی سرویس بخوابد با آن نخوابد.",
     whereMeasured: "اندازه‌گیری از خارج ایران انجام می‌شود، پس حدود یک ثانیه از هر عدد مربوط به مسیر شبکه است نه به سرویس. از داخل ایران همین سرویس‌ها معمولاً زیر ۳۰۰ میلی‌ثانیه جواب می‌دهند.",
-    ago90: "۹۰ روز پیش",
-    today: "امروز",
+    windowStart: "۱۰۰ ساعت پیش",
+    windowEnd: "اکنون",
     ongoing: "ادامه دارد",
     up: "سالم", slow: "کند", down: "قطع", none: "بدون داده",
     svc: {
@@ -167,12 +172,12 @@ const STR = {
     someDown: "We have an outage",
     unknown: "Status unknown",
     incidents: "Past incidents",
-    noIncidents: "No incidents recorded in the last ninety days.",
+    noIncidents: "No incidents recorded in the last 100 hours.",
     updatedLabel: "Last checked:",
     hosting: "This page is hosted separately from Segmentic, so it does not go down with the service.",
     whereMeasured: "Timings are measured from outside Iran, so roughly a second of each figure is the network path rather than the service. From inside Iran these services typically answer in under 300ms.",
-    ago90: "90 days ago",
-    today: "Today",
+    windowStart: "100 hours ago",
+    windowEnd: "Now",
     ongoing: "ongoing",
     up: "Healthy", slow: "Slow", down: "Down", none: "No data",
     svc: {
@@ -186,7 +191,7 @@ const STR = {
 };
 
 const ORDER = ["ingest", "api", "panel", "site"];
-const DAYS = 90;
+const HOURS = 100;
 
 // A choice already made wins over a guess, and a guess wins over nothing.
 //
@@ -199,27 +204,41 @@ const DAYS = 90;
 let locale = (localStorage.getItem("segmentic-status-lang") ??
   (navigator.language?.startsWith("fa") ? "fa" : "en"));
 
-/** Tehran day keys for the last ninety days, oldest first. */
-function dayKeys() {
-  const out = [];
-  const fmt = new Intl.DateTimeFormat("en-CA", {
+/**
+ * One Tehran hour, as YYYY-MM-DDTHH. The same key the probe writes.
+ *
+ * Read from parts rather than from a formatted string, because a formatter
+ * asked for a date and an hour together picks its own punctuation, and
+ * hourCycle h23 is what keeps midnight as 00 rather than 24.
+ */
+function tehranHour(when) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Tehran", year: "numeric", month: "2-digit", day: "2-digit",
-  });
+    hour: "2-digit", hourCycle: "h23",
+  }).formatToParts(when);
+  const at = (type) => parts.find((p) => p.type === type)?.value ?? "00";
+  return `${at("year")}-${at("month")}-${at("day")}T${at("hour")}`;
+}
+
+/** Tehran hour keys for the last hundred hours, oldest first. */
+function hourKeys() {
+  const out = [];
   const now = Date.now();
-  for (let i = DAYS - 1; i >= 0; i--) {
-    out.push(fmt.format(new Date(now - i * 86_400_000)));
+  for (let i = HOURS - 1; i >= 0; i--) {
+    out.push(tehranHour(new Date(now - i * 3_600_000)));
   }
   return out;
 }
 
 /**
- * One day of one service, as a single state.
+ * One hour of one service, as a single state.
  *
- * Any downtime at all colours the day red. A day that was 99% fine and 1% down
- * is a day somebody's events were dropped, and averaging that away is how a
- * status page ends up disagreeing with the person reading it.
+ * Any downtime at all colours the hour red. An hour that was fifty minutes
+ * fine and ten minutes down is an hour somebody's events were dropped, and
+ * averaging that away is how a status page ends up disagreeing with the person
+ * reading it.
  */
-function dayState(bucket) {
+function hourState(bucket) {
   if (!bucket || !bucket.checks) return "none";
   if (bucket.down > 0) return "down";
   if (bucket.slow > 0) return "slow";
@@ -249,14 +268,14 @@ function render(data) {
   document.getElementById("overall").innerHTML =
     `<span class="dot ${overall}"></span> ${escapeHtml(overallText)}`;
 
-  const keys = dayKeys();
+  const keys = hourKeys();
   document.getElementById("services").innerHTML = ORDER.map((id) => {
     const state = current[id]?.state ?? "none";
     const bars = keys.map((k) => {
-      const s = dayState(data?.days?.[k]?.[id]);
+      const s = hourState(data?.hours?.[k]?.[id]);
       // The tooltip is display text, so it gets the reader's calendar. The key
-      // itself stays YYYY-MM-DD everywhere else because that is what sorts.
-      return `<div class="bar ${s}" title="${escapeHtml(fmtDay(k))}"></div>`;
+      // itself stays YYYY-MM-DDTHH everywhere else because that is what sorts.
+      return `<div class="bar ${s}" title="${escapeHtml(fmtHour(k))}"></div>`;
     }).join("");
     return `
       <div class="svc">
@@ -265,7 +284,7 @@ function render(data) {
           <div class="svc-state">${escapeHtml(t[state] ?? state)}</div>
         </div>
         <div class="bars">${bars}</div>
-        <div class="scale"><span>${escapeHtml(t.ago90)}</span><span>${escapeHtml(t.today)}</span></div>
+        <div class="scale"><span>${escapeHtml(t.windowStart)}</span><span>${escapeHtml(t.windowEnd)}</span></div>
       </div>`;
   }).join("");
 
@@ -305,18 +324,23 @@ function fmtDate(iso) {
 }
 
 /**
- * One day key, as a date without a time.
+ * One hour key, as a date and an hour.
  *
- * Parsed as noon UTC rather than midnight. A bare YYYY-MM-DD is midnight UTC,
- * which is half past three in the morning in Tehran, and any rounding the
- * other way would render the day before. Noon has no such edge.
+ * The key is already Tehran wall clock, so it is parsed with Tehran's offset
+ * written into it rather than as UTC. +03:30 is the same all year: Iran
+ * dropped daylight saving in 2022. Parsing it as UTC would draw every bar
+ * three and a half hours away from the hour it measured.
+ *
+ * No year. The whole window is four days wide, so a year on every one of a
+ * hundred tooltips is noise.
  */
-function fmtDay(key) {
-  const d = new Date(`${key}T12:00:00Z`);
+function fmtHour(key) {
+  const d = new Date(`${key.slice(0, 10)}T${key.slice(11)}:00:00+03:30`);
   if (Number.isNaN(d.getTime())) return key;
   return new Intl.DateTimeFormat(locale === "fa" ? "fa-IR-u-ca-persian" : "en-GB", {
     timeZone: "Asia/Tehran",
-    year: "numeric", month: "short", day: "numeric",
+    month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
   }).format(d);
 }
 
