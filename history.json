@@ -8,23 +8,23 @@
    "note": ""
   }
  ],
- "updated": "2026-08-06T01:11:10.262Z",
+ "updated": "2026-08-06T04:33:18.149Z",
  "current": {
   "ingest": {
    "state": "up",
-   "ms": 684
+   "ms": 989
   },
   "api": {
    "state": "up",
-   "ms": 657
+   "ms": 980
   },
   "panel": {
    "state": "up",
-   "ms": 669
+   "ms": 1382
   },
   "site": {
    "state": "up",
-   "ms": 681
+   "ms": 1063
   }
  },
  "hours": {
@@ -296,6 +296,66 @@
     "down": 0,
     "ms": 718,
     "checks": 5
+   }
+  },
+  "2026-08-06T07": {
+   "ingest": {
+    "up": 2,
+    "slow": 0,
+    "down": 0,
+    "ms": 1383,
+    "checks": 2
+   },
+   "api": {
+    "up": 2,
+    "slow": 0,
+    "down": 0,
+    "ms": 1229,
+    "checks": 2
+   },
+   "panel": {
+    "up": 2,
+    "slow": 0,
+    "down": 0,
+    "ms": 1027,
+    "checks": 2
+   },
+   "site": {
+    "up": 2,
+    "slow": 0,
+    "down": 0,
+    "ms": 1235,
+    "checks": 2
+   }
+  },
+  "2026-08-06T08": {
+   "ingest": {
+    "up": 3,
+    "slow": 0,
+    "down": 0,
+    "ms": 1086,
+    "checks": 3
+   },
+   "api": {
+    "up": 3,
+    "slow": 0,
+    "down": 0,
+    "ms": 987,
+    "checks": 3
+   },
+   "panel": {
+    "up": 3,
+    "slow": 0,
+    "down": 0,
+    "ms": 1267,
+    "checks": 3
+   },
+   "site": {
+    "up": 3,
+    "slow": 0,
+    "down": 0,
+    "ms": 1004,
+    "checks": 3
    }
   }
  }
