@@ -1,0 +1,19 @@
+name = "segmentic-status-trigger"
+main = "worker.js"
+compatibility_date = "2026-08-06"
+
+# No route and no custom domain, on purpose. This Worker has no HTTP handler
+# and nothing to visit: it only ever runs from the cron below. That is what
+# keeps workers.dev being filtered in Iran from mattering here.
+
+[triggers]
+# Every ten minutes, which is the cadence GitHub's own scheduler promised and
+# did not keep. Each dispatched run samples for five minutes, so this covers
+# half of every hour, and the workflow's concurrency group means a dispatch
+# that arrives while a run is still going waits rather than overlapping.
+crons = ["*/10 * * * *"]
+
+# Observability, so a trigger that starts failing says so somewhere.
+# `npx wrangler tail` reads it live, and the dashboard keeps the logs.
+[observability]
+enabled = true
