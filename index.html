@@ -75,7 +75,12 @@
   .dot.down { background: var(--down); }
   .dot.none { background: var(--none); }
 
-  .svc { border-top: 1px solid var(--line); padding: 16px 0; }
+  /* One number for how tall a service row is, used both to lay the row out
+     and to reserve its space before the data arrives. Two independent numbers
+     would drift the first time the row design changed, and the symptom would
+     be a layout shift nobody connected to a padding tweak. */
+  :root { --svc-row: 93px; }
+  .svc { border-top: 1px solid var(--line); padding: 16px 0; min-height: var(--svc-row); }
   .svc-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .svc-name { display: flex; align-items: center; gap: 8px; font-weight: 500; }
   .svc-state { color: var(--muted); font-size: 13px; }
@@ -354,6 +359,28 @@ document.getElementById("lang").addEventListener("click", () => {
   localStorage.setItem("segmentic-status-lang", locale);
   render(window.__data ?? null);
 });
+
+// Reserve the height the content will occupy, before asking for it.
+//
+// Everything on this page arrives in one fetch, so without this the services
+// list and the incident list both grow from nothing and shove the rest of the
+// page down: measured at CLS 0.230 on mobile, inside Google's "poor" band, on
+// a page whose entire job is to be readable during an incident.
+//
+// Derived from ORDER rather than written as a pixel value, so adding a fifth
+// service reserves room for a fifth service without anybody remembering to
+// come back here.
+(function reserveSpace() {
+  const rowPx = parseInt(
+    getComputedStyle(document.documentElement).getPropertyValue("--svc-row"), 10) || 93;
+  const services = document.getElementById("services");
+  if (services) services.style.minHeight = `${ORDER.length * rowPx}px`;
+  // One entry's worth for the incident list. The healthy case is the empty
+  // message, which is shorter, so this over-reserves slightly rather than
+  // under-reserving: whitespace that stays still beats content that jumps.
+  const incidents = document.getElementById("incidents");
+  if (incidents) incidents.style.minHeight = "62px";
+})();
 
 async function load() {
   try {
