@@ -8,23 +8,23 @@
    "note": ""
   }
  ],
- "updated": "2026-08-07T05:13:35.977Z",
+ "updated": "2026-08-07T06:21:41.189Z",
  "current": {
   "ingest": {
    "state": "up",
-   "ms": 800
+   "ms": 1136
   },
   "api": {
    "state": "up",
-   "ms": 1221
+   "ms": 1279
   },
   "panel": {
    "state": "up",
-   "ms": 1099
+   "ms": 970
   },
   "site": {
    "state": "up",
-   "ms": 1005
+   "ms": 1030
   }
  },
  "hours": {
@@ -565,6 +565,36 @@
     "slow": 0,
     "down": 0,
     "ms": 1127,
+    "checks": 5
+   }
+  },
+  "2026-08-07T09": {
+   "ingest": {
+    "up": 5,
+    "slow": 0,
+    "down": 0,
+    "ms": 1052,
+    "checks": 5
+   },
+   "api": {
+    "up": 5,
+    "slow": 0,
+    "down": 0,
+    "ms": 1167,
+    "checks": 5
+   },
+   "panel": {
+    "up": 5,
+    "slow": 0,
+    "down": 0,
+    "ms": 1044,
+    "checks": 5
+   },
+   "site": {
+    "up": 5,
+    "slow": 0,
+    "down": 0,
+    "ms": 1140,
     "checks": 5
    }
   }
