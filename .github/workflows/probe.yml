@@ -29,7 +29,24 @@ on:
     # samples per run: what the scheduler does honour should at least be worth
     # more than one measurement. If this stays this unreliable the trigger has
     # to move off GitHub.
-    - cron: "3,13,23,33,43,53 * * * *"
+    # Disabled 2026-08-07. The probe and the page moved to segmentic-watchdog,
+    # a second machine of ours in a different Arvan datacentre, and
+    # status.segmentic.net is now an A record pointing there rather than a
+    # CNAME to Pages.
+    #
+    # Two reasons, both measured rather than felt. The Actions minutes ran out,
+    # 2108 of 2000 in six days, so this schedule was competing with the deploys
+    # for a budget that had already gone. And the comment above is the other:
+    # one run in three and a half hours from a cron asking for one every ten
+    # minutes. A systemd timer on our own box fires on the wall clock.
+    #
+    # The independence that made GitHub the right home in the first place is
+    # intact: the watchdog is not a machine this page reports on.
+    #
+    # Left here rather than deleted so the history and the reasoning stay
+    # together, and so this is one line to restore if the watchdog is ever the
+    # wrong place for it.
+    # - cron: "3,13,23,33,43,53 * * * *"
   # For running it by hand after changing the probe or the page.
   workflow_dispatch:
   # A change to the page itself should show up without waiting for the next

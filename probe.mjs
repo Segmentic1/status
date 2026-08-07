@@ -273,7 +273,28 @@ async function main() {
   // the real failure gets missed.
 }
 
-main().catch((err) => {
-  console.error("probe failed:", err);
-  process.exit(1);
-});
+main()
+  .then(() => {
+    // Exit explicitly once the history is written.
+    //
+    // Node keeps the process alive while undici holds its keep-alive sockets
+    // open, so this script finished its work and then sat there for minutes
+    // doing nothing. On GitHub's runners nobody could see it: the run ends
+    // when the VM is torn down, so a process that never exits looks exactly
+    // like one that did.
+    //
+    // On a systemd timer it is the whole ballgame. A Type=oneshot unit stays
+    // in "activating" until its process leaves, and a timer will not schedule
+    // its next run while the unit it activates is still going. Measured on the
+    // watchdog: eight minutes after writing history.json the process was still
+    // resident and NextElapseUSecRealtime was empty, meaning the ten-minute
+    // probe had run exactly once and would never run again.
+    //
+    // That is precisely the failure this page exists to catch, wearing the
+    // costume of a working deployment, so it is worth one line to be sure.
+    process.exit(0);
+  })
+  .catch((err) => {
+    console.error("probe failed:", err);
+    process.exit(1);
+  });
